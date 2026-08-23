@@ -23,7 +23,8 @@ https://claude.ai/code/artifact/a400c085-faf1-4c36-8e32-55f2f224ae84?via=auto_pr
 Front :
 <img width="2032" height="956" alt="image" src="https://github.com/user-attachments/assets/c83a65d1-fdee-452a-b242-ad1b2056a63a" />
 
-Back : <img width="2986" height="2140" alt="image" src="https://github.com/user-attachments/assets/f760bbf2-f217-48a9-a47b-f60098668fa8" />
+Back : <img width="3086" height="1064" alt="image" src="https://github.com/user-attachments/assets/8171955c-d017-42c8-933e-e1388246b195" />
+
 
 - Alphabetically/numberically order when click on "sort field" column head :
 Use 3 digits and greater number come first eg. [013-012] in order to make it sort properly (that's how SQL works) 
