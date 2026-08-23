@@ -11,7 +11,7 @@ https://claude.ai/code/artifact/a400c085-faf1-4c36-8e32-55f2f224ae84?via=auto_pr
 ! for Claude) recommend using this with Claude code in Vscode (so that it doesn't have token limitation issue)
 
 3. Open Anki --> click "import file" button (at the button of deck page)
-- Card type : Cloze (very important!!)
+**- Card type : Cloze (very important!!)**
 <img width="1948" height="2148" alt="image" src="https://github.com/user-attachments/assets/9ebeda81-91e0-48a6-8afe-60536bc795fb" />
 !! be careful) select the correct deck
 
