@@ -6,7 +6,7 @@ https://claude.ai/code/artifact/a400c085-faf1-4c36-8e32-55f2f224ae84?via=auto_pr
 
 1. Copy this into ANY generative AI ex. Gemini, ChatGPT, Cluade. You will get plain text and .txt file
 
---> PROMPT.md : https://github.com/Punnawit9285/Anki-Prompt-for-Med-School/blob/main/PROMPT.md
+**--> PROMPT.md :** https://github.com/Punnawit9285/Anki-Prompt-for-Med-School/blob/main/PROMPT.md
 
 ! for Claude) recommend using this with Claude code in Vscode (so that it doesn't have token limitation issue)
 
