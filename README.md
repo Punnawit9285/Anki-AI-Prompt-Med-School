@@ -1,5 +1,7 @@
 **Ultimate anki flashcard AI prompt for med school students**
 
+https://claude.ai/code/artifact/a400c085-faf1-4c36-8e32-55f2f224ae84?via=auto_preview
+
 **How to use?**
 
 1. Copy this into ANY generative AI ex. Gemini, ChatGPT, Cluade. You will get plain text and .txt file
@@ -15,8 +17,6 @@
 **The intention of this flashcard is to be used as pre-lecture template. Furthur information/notes should be reviewed by human.
 
 **What will it looks like?**
-
-https://claude.ai/code/artifact/a400c085-faf1-4c36-8e32-55f2f224ae84?via=auto_preview
 
 Front :
 <img width="2032" height="956" alt="image" src="https://github.com/user-attachments/assets/c83a65d1-fdee-452a-b242-ad1b2056a63a" />
