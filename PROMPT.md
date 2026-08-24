@@ -21,7 +21,7 @@ CARD FIELD FORMATTING REQUIREMENTS
 1. TEXT (Front Field)
 Slide Reference Placement and Format (FIRST LINE, ZERO-PADDED, CRITICAL FOR SORTING):
  - The slide reference must be the very first thing in the Text field. Nothing may precede it. It is followed by a single space, then the lecture name, then a colon, then a single <br> that closes the line. Neither the reference nor the lecture name is ever bolded.
- - Write it as an opening square bracket, then the slide number padded with leading zeros to EXACTLY three digits, then a closing square bracket: [003], [017], [042], [115].
+ - Write it as an opening square bracket, then the slide number padded with leading zeros to EXACTLY three digits, then an optional sequence letter described below, then a closing square bracket: [003], [017], [042], [115], [099a].
  - Zero-padding is mandatory and non-negotiable. It exists so that the deck sorts correctly by the Sort Field in the Anki browser, where plain text sorting would otherwise place slide 10 before slide 2. Three digits are always used even for single-digit and double-digit slides. Never write [3] or [42].
  - For a card covering a contiguous range of slides, pad both numbers and write the HIGHER number FIRST, so the pair reads backwards: slides 12 and 13 become [013-012], slides 53 and 54 become [054-053], slides 75 through 77 become [077-075]. The reversal is deliberate, not a mistake.
  - Reversing the pair keys the card to its HIGHEST slide, which makes it sort immediately after the last slide it covers instead of jumping ahead of the first one. [013-012] lands between [012] and [013]. Written the natural way round, [012-013] would sort before [012] and the card would appear before the slides it summarises.
@@ -29,6 +29,15 @@ Slide Reference Placement and Format (FIRST LINE, ZERO-PADDED, CRITICAL FOR SORT
  - Every key is filed under the number written FIRST inside the brackets. A reversed range therefore files under its higher slide: [013-012] files under 13. A non-adjacent key files under the number written first, so [046+063] files under 46.
  - Because the - and + characters sort lower than the closing bracket, a joined key always sits immediately BEFORE the plain card of the slide it files under. So slides 12 to 14 come out in the order [012], [013-012], [013], [014]. This is intended.
  - Multiple cards may share the same slide number. They will sort adjacent to one another, which is intended, and any new card later added for that same slide will automatically fall into the same group.
+Within-Slide Sequence Letter (REQUIRED WHENEVER ONE SLIDE PRODUCES MORE THAN ONE CARD):
+ - Anki sorts entirely on the Sort Field and ignores the order of the lines in the file. Two cards sharing a key are therefore ordered by whatever text follows the key, which means their TITLES get alphabetised. Emitting them in content order is not enough on its own and will not survive the import.
+ - So when a single slide produces two or more cards, give EVERY card from that slide a single lowercase letter placed immediately before the closing bracket, assigned in the order the content appears on the slide, top to bottom and left to right: [099a], [099b], [099c].
+ - The letter records reading order on the slide, not importance. The card covering the top of the slide takes a, the next one down takes b, and so on. Without it a card titled The Glucose-Alanine Cycle would jump ahead of one titled Contrast Between the Cahill Cycle and the Cori Cycle purely because T follows C.
+ - A slide that produces only ONE card takes no letter and stays [099].
+ - Never mix the two forms within one slide. If a slide yields two cards, BOTH carry letters. A file holding [099] and [099a] for the same slide is wrong, because the bare key sorts ahead of every lettered one.
+ - A range or joined key carries its letter in the same position, immediately before the closing bracket: [100-099a], [100-099b], [046+063a].
+ - Use one lowercase letter only, running a, b, c, d. Never a capital, never a digit, never two letters.
+ - If you later add a card in the middle of a slide, relabel that slide letters so they stay in reading order. It is only ever a handful of cards and it keeps the sequence meaningful.
 Lecture Name (SAME LINE, AFTER THE KEY, IDENTICAL ON EVERY CARD):
  - Immediately after the closing bracket, write one space, then the name of the lecture, then a single colon that closes it. The first line therefore reads [004] Amino acid metabolism: and nothing on that line is ever bolded. The colon is part of the required format and must appear on every card.
  - The lecture name must be byte-for-byte IDENTICAL on every single card in the deck. Same words, same capitalisation, same spacing, no card left without one. It is a constant label, not a per-slide description, and it must never be varied to describe what an individual slide covers.
@@ -74,12 +83,13 @@ Front End-Cap Break: You must end the front card text with an HTML line break (<
 Output Ordering (THE FILE MUST ARRIVE PRE-SORTED):
  - Emit the card lines in ascending numeric slide order so the file is already sorted the moment it is imported, and so it reads in lecture order if opened in a text editor.
  - Sort by the numeric value of the number written first in the key. Every key beginning with the same number forms one contiguous group, and inside that group a joined key comes before the plain one. Slides 12 to 14 are emitted as [012], [013-012], [013], [014]. Emit them in that order so the text file matches what the Anki browser will display.
- - When several cards share one slide number, emit them in the order their content appears on that slide, top to bottom, left to right. Keep this order stable so the same input always produces the same output.
+ - When several cards share one slide number, they MUST carry sequence letters, and they are emitted in letter order, which is the order their content appears on that slide, top to bottom and left to right. Keep this order stable so the same input always produces the same output.
  - Never merge, renumber, or reorder cards to make the sequence look tidier. Gaps in slide numbers are expected and must be preserved exactly.
 Appending New Cards Later (NO REBUILD REQUIRED): A new card written with the correct zero-padded key needs no adjustment to any existing card and no re-sorting of the deck. It may simply be appended to the end of the file or pasted anywhere, because Anki sorts on the Sort Field rather than on file order, and the padded key places it next to the cards it belongs with. Sort the Anki browser by Sort Field once, and every future addition lands in the right place on its own.
 Pre-Output Self-Check (RUN BEFORE EMITTING — DO NOT SKIP)
 Silently verify every line, and fix any line that fails, before printing the code block:
- - Every line begins with a double quote, then an opening square bracket, then exactly three digits, then either a closing bracket or a - or + joiner followed by three more digits and a closing bracket.
+ - Every line begins with a double quote, then an opening square bracket, then exactly three digits, then optionally a - or + joiner with three more digits, then optionally one lowercase sequence letter, then a closing bracket.
+ - Any slide that produced more than one card has a sequence letter on EVERY one of those cards, running a, b, c in slide reading order, with no bare unlettered key left among them.
  - Every line carries the lecture name after the key, spelled identically on every card, ending in a colon, followed by <br>. Compare the first line of all cards against each other and fix any that differ.
  - Every line contains exactly two semicolons and exactly six double quotes.
  - No semicolon and no double quote appears anywhere inside a field, and every HTML attribute uses single quotes.
