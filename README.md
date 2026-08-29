@@ -60,7 +60,13 @@ Back : <img width="3086" height="1064" alt="image" src="https://github.com/user-
 
 
 - Alphabetically/numberically order when click on "sort field" column head :
-Use 3 digits and greater number come first eg. [013-012] in order to make it sort properly (that's how SQL works) 
+Use 3 digits and greater number come first eg. [013-012] in order to make it sort properly
+
+Why? : The reason lies with how SQLite works
+
+**The most common reason SQLite sorts numbers weirdly (like showing 1, 10, 11, 2, 21, 3 instead of 1, 2, 3, 10) is that the column is storing data as TEXT instead of an INTEGER or REAL.When numbers are stored as text, SQLite sorts them alphabetically (character by character) rather than numerically.
+
+**Fix : Add Leading Zeros: Pad your numbers with zeros so every number has the same digit length (e.g., use 01, 02... 09, 10 instead of 1, 2... 9, 10). (As done in prompt)
 
 - If user wants to add cards/page, I suggest putting [page number] as the first thing so that when sorted it's directly next to existing card with that specific page/pages
 
