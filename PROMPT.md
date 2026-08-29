@@ -57,6 +57,28 @@ Slide Number Accuracy (CRITICAL — NEVER GUESS A NUMBER):
 Subtopic Headings: Every distinct subtopic heading within the card body must be wrapped in bold HTML tags exactly as <b>Subtopic Heading Name</b>, and must be separated from preceding text by a double line break (<br><br>). Bold the heading only — never bold the bullet points beneath it.
 Structural Spacing: Add a double line break (<br><br>) right before introducing any main bullet point block.
 Body Formatting: Express concepts using clean bullet points/dashes in cloze deletion syntax (e.g., The target element is {{c1::<u>cloze text</u>}}).
+Chemical Formulae and Equations (MATHJAX, INLINE DELIMITERS ONLY):
+ - Every chemical formula, ion, and reaction equation must be written as MathJax so that Anki renders it properly. Never leave a formula as flattened prose. Writing the remaining 15 percent is phosphate ion as HPO4 2 minus and H2PO4 minus is unreadable and is exactly what this rule exists to prevent.
+ - Use Anki inline delimiters only: a backslash and an opening parenthesis to start, a backslash and a closing parenthesis to end. Written out: \(\mathrm{HPO_4^{2-}}\) and \(\mathrm{H_2PO_4^-}\).
+ - Do NOT use the display delimiters \[ and \]. They would put square brackets inside the card, and square brackets are reserved for the slide key and the [sa] marker. Display math also breaks the flow of a bullet.
+ - Wrap chemical species in \mathrm{} so element symbols render upright rather than italic, which is the correct convention for chemistry.
+ - Subscripts use an underscore and superscripts use a caret, with braces around anything longer than a single character: H_2, ^{2-}, PO_4^{3-}.
+ - Put a whole reaction inside ONE pair of delimiters rather than stitching several together: \(\mathrm{HPO_4^{2-} + H^+ \rightarrow H_2PO_4^-}\).
+ - NEVER use the LaTeX spacing command consisting of a backslash and a semicolon. It places a literal semicolon inside the field and destroys the CSV import, because the semicolon is the column delimiter. Use \, or an ordinary space instead. For the same reason never use a backslash followed by a double quote.
+ - A cloze wraps the WHOLE expression from the outside, delimiters included, with the underline inside the cloze as usual: {{c1::<u>\(\mathrm{H_2PO_4^-}\)</u>}}. Never open a cloze inside a MathJax expression, because its braces collide with the LaTeX braces and Anki will mis-parse the card.
+Two Closing Braces Will Break a Clozed Formula (THE MOST COMMON MATHJAX FAILURE):
+ - Anki finds the end of a cloze by scanning forward for the FIRST pair of closing braces. Any two closing braces sitting next to each other inside a cloze therefore end it early and wreck the card.
+ - This bites hardest on ions written with a braced charge inside \mathrm, because the charge brace and the \mathrm brace close together. Clozing \(\mathrm{HPO_4^{2-}}\) makes Anki stop at 2- and leave the closing delimiter stranded outside the blank, so the formula never renders.
+ - PREFERRED FIX, close \mathrm before the charge so the two groups never touch: write \(\mathrm{HPO_4}^{2-}\) instead of \(\mathrm{HPO_4^{2-}}\). The two render identically, because a charge contains no letters that italics would affect, and the safe form has no adjacent closing braces at all. Use this form for every ion by default, clozed or not.
+ - FALLBACK FIX, when the structure genuinely cannot avoid a nested group, such as a fraction: insert one space before the outer closing brace, as in \(\mathrm{HPO_4^{2-} }\) or \(\frac{a}{b }\). LaTeX ignores the space and the rendering is unchanged, but the brace pair is broken.
+ - The check is simple and absolute: no two closing braces may sit next to each other anywhere inside a cloze. Scan every clozed formula for that pair before emitting the card.
+ - Ending the expression with the closing delimiter and the underline tag helps, because a clozed formula then finishes with a backslash, a parenthesis and </u> rather than with braces.
+ - Never place punctuation inside a cloze. Writing {{c1::buffer,}} hides the comma along with the word and the revealed sentence reads wrongly. Keep commas, full stops and semicolons outside the braces.
+ - Plain numbers, percentages, doses, and units stay ordinary text. MathJax is for formulae and equations, not for every digit on the slide.
+Arrows for Consequence and Reaction:
+ - When one thing leads to, produces, converts into, or results in another, write the arrow as two hyphens followed by a greater-than sign: -->. Write raised blood ammonia --> encephalopathy rather than spelling out leads to.
+ - This applies to causal chains in prose and to any sequence of steps. Several arrows may appear in one bullet: glutamine --> glutamate --> alpha-ketoglutarate.
+ - Inside a MathJax expression use \rightarrow instead, because the two-hyphen form would render there as two minus signs. So prose carries --> and equations carry \rightarrow.
 Selective Clozing (NOT EVERY FACT BECOMES A BLANK):
  - Do NOT cloze every fact on the slide. Within each subtopic pick only the two or three highest-yield targets and leave every other fact as plain unclozed prose that supports them. Unclozed prose carries no braces and no underline.
  - Numbers, quantities, doses, and measurements are never placed inside cloze braces and never underlined, even when they are high-yield. Write them as plain text so they are always visible.
@@ -97,6 +119,9 @@ Silently verify every line, and fix any line that fails, before printing the cod
  - Bold tags wrap the title and the subtopic headings only, never a bullet.
  - Cloze numbers run c1, c2, c3 with no gaps and no restarts, and each number covers about two to three targets rather than one.
  - Every cloze answer is wrapped in <u> and </u> INSIDE its braces, with no cloze left bare.
+ - Every chemical formula and equation sits inside inline MathJax delimiters with \mathrm for the species, and no display-math brackets and no backslash-semicolon spacing command appears anywhere in the file.
+ - Every leads-to relationship in prose is written --> and every arrow inside a MathJax expression is written \rightarrow.
+ - No cloze anywhere contains two closing braces sitting next to each other, and every ion is written with its charge outside the \mathrm group.
  - Every range key joined by - has its HIGHER number written first, for example [013-012] and never [012-013].
  - Every [sa] marker sits outside its braces, carries the same number as its original, and has that original earlier in the SAME subtopic. No other square brackets appear outside the slide key.
  - Each line ends with <br> immediately before the closing quote of the Text field.
@@ -118,5 +143,7 @@ MODEL EXAMPLE LINES WITH SPECIFIC HEADINGS
 
 
 "[010] Amino acid metabolism:<br><b>Metabolic Precursors of the Non-Essential Amino Acids</b><br><br><b>Precursors Drawn From Glycolysis</b><br><br>- Alanine is formed by transamination of {{c1::<u>pyruvate</u>}}, and serine is derived from the glycolytic intermediate {{c1::<u>3-phosphoglycerate</u>}}.<br><br><b>Precursors Drawn From the TCA Cycle</b><br><br>- Aspartate is formed by transamination of {{c2::<u>oxaloacetate</u>}}, and glutamate is formed by transamination of {{c2::<u>alpha-ketoglutarate</u>}}.<br><br>- Glutamine is then made from {{c3::<u>glutamate</u>}} by the enzyme {{c3::<u>glutamine synthetase</u>}}.<br>";"<font color='#55aaff'>Only the carbon skeleton needs a dedicated precursor because the amino group is supplied by transamination from the shared glutamate pool. — chuaypen2025</font>";"bsxaasynthesis"
+
+"[042] Mineral metabolism:<br><b>Phosphate as the Major Intracellular Buffer</b><br><br><b>Distribution of Buffer Phosphate</b><br><br>- The remaining 15 percent of body phosphate acts as buffer, present as \(\mathrm{HPO_4}^{2-}\) and \(\mathrm{H_2PO_4^-}\), with 14 percent intracellular and 1 percent extracellular.<br><br><b>How the Pair Resists Acid</b><br><br>- Added acid is taken up by the reaction {{c1::<u>\(\mathrm{HPO_4}^{2-} + \mathrm{H^+} \rightarrow \mathrm{H_2PO_4^-}\)</u>}}, so the pair buffers a fall in pH.<br><br>- Because most of it sits inside cells, a large acid load --> phosphate buffering --> a rise in urinary {{c1::<u>titratable acid</u>}}.<br>";"<font color='#55aaff'>Bicarbonate handles most extracellular buffering, which is why phosphate is described as the major intracellular buffer rather than a plasma one. — chuaypen2025</font>";"bsxacidbase"
 
 Read the attached material thoroughly and execute this structure systematically.
