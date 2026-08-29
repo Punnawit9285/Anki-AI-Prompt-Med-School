@@ -1,6 +1,6 @@
 **Ultimate anki flashcard AI prompt for med school students**
 
-https://claude.ai/code/artifact/a400c085-faf1-4c36-8e32-55f2f224ae84?via=auto_preview
+demo : https://claude.ai/code/artifact/a400c085-faf1-4c36-8e32-55f2f224ae84?via=auto_preview
 
 **How to use?**
 
