@@ -20,53 +20,36 @@ https://claude.ai/code/artifact/a400c085-faf1-4c36-8e32-55f2f224ae84?via=auto_pr
 
 **Features**
 
-CSV Architecture & Data Safety
+- **Structured Layout & Metadata**
+  - Enforces bold tags (`<b>Heading</b>`) for titles and subtopic headers, separated by double line breaks (`<br><br>`).
+  - Wraps the `Extra` back-field in `<font color='#55aaff'>`, separating notes from citations with em-dashes (` — `).
+  - Assigns single, lowercase tags matching component domains and topic acronyms (e.g., `bsxtranscription`).
+    
+- **Deterministic Deck Sorting**
+  - Prefixes cards with zero-padded slide keys (e.g., `[003]`) to ensure correct sorting in the Anki browser.
+  - Maps slide ranges using reversed high-to-low keys (e.g., `[013-012]`) to place summaries immediately after covered content.
+  - Appends sequential lowercase letters (`[099a]`, `[099b]`) for multi-card slides to preserve reading order.
 
-Uses exact "Text";"Extra";"Tags" field layout with semicolon column delimiters.
+- **Information Design & Selective Clozing**
+  - Applies the minimum information principle, targeting 2–3 clozes per group (`{{c1::...}}`).
+  - Mandates inline underline tags inside cloze boundaries (`{{c1::<u>answer text</u>}}`).
+  - Keeps numerical metrics, doses, and measurements as unclozed plain text context.
+  - Tracks repeated cloze targets within a subtopic using an external `[sa]` marker (`{{c1::<u>Target</u>}}[sa]`).
 
-Restricts HTML attributes to single quotes (e.g., color='#55aaff') to prevent broken CSV string literals.
+- **MathJax & Chemical Formatting**
+  - Renders formulas and equations via inline MathJax `\(\mathrm{...}\)`, banning display brackets `\[ \]`.
+  - Prevents Anki double-brace parse collisions by placing charge superscripts outside `\mathrm{}` (e.g., `\(\mathrm{HPO_4}^{2-}\)`).
+  - Standardizes causal arrows using `-->` in prose and `\rightarrow` in MathJax.
 
-Strictly forbids internal semicolons and unescaped double quotes within fields.
+- **CSV Architecture & Data Safety**
+  - Standardizes field structure as `"Text";"Extra";"Tags"` with semicolon delimiters.
+  - Uses single quotes for inline HTML attributes (e.g., `color='#55aaff'`) to prevent CSV string literal corruption.
+  - Forbids internal semicolons and unescaped double quotes inside data fields.
+  - Strips automatic LLM bracket citations to maintain clean card text.
 
-Strips LLM auto-citations (e.g., ``) to maintain clean card text.
 
-Deterministic Deck Sorting
-
-Enforces zero-padded slide keys (e.g., [003]) on the first line to guarantee correct Anki browser sorting.
-
-Handles slide ranges via reversed indexing (e.g., [013-012]) to group multi-slide summaries directly after their source slides.
-
-Uses within-slide sequence letters ([099a], [099b]) to retain true top-to-bottom reading order after import.
-
-Information Design & Cloze Rules
-
-Implements minimum information principle with 2–3 target blanks per cloze group ({{c1::...}}).
-
-Mandates underline tags inside cloze boundaries ({{c1::<u>answer text</u>}}).
-
-Leaves numerical values, doses, and measurements as unclozed plain text context.
-
-Uses [sa] markers outside braces for repeated cloze targets within the same subtopic.
-
-MathJax & Chemical Syntax
-
-Enforces inline MathJax \(\mathrm{...}\) for chemical species and equations, banning display math brackets \[ \].
-
-Fixes Anki double-brace parse collisions by placing charge superscripts outside \mathrm blocks (e.g., \(\mathrm{HPO_4}^{2-}\)).
-
-Standardizes causal relationships using --> in prose and \rightarrow in MathJax.
-
-Card Layout & Extra Field
-
-Requires uniform subtopic headers in bold (<b>Subtopic Header</b>) separated by double line breaks (<br><br>).
-
-Formats the Extra field inside <font color='#55aaff'> with supplementary context separated from citations by em dashes (—).
-
-Generates single, lowercase hierarchical tags combining component type and topic (e.g., bsxtranscription).
-
-Quality Assurance
-
-Includes an automated pre-output checklist to verify slide ordering, cloze indices, MathJax syntax, and column delimiters prior to code block emission.
+- **Automated Validation**
+  - Requires a pre-emission check to verify column delimiter counts, MathJax syntax, cloze indexing, and slide ordering before code output.
 
 **What will it looks like?**
 
