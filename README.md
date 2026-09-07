@@ -1,8 +1,13 @@
 **Ultimate anki flashcard AI prompt for med school students**
 
+*Can Auto-add image to the back of the card*
+(images will be high-resolution screenshot of every corresponding slide page in attached file)
+! this feature only work if your generative AI has access to local files. 
+ex. using Claude desktop / Antigravity / Claude code (VS code) / Codex (VS code)
+
 demo : https://claude.ai/code/artifact/a400c085-faf1-4c36-8e32-55f2f224ae84?via=auto_preview
 
-**How to use?**
+**How to use?** [No-image]
 
 1. Copy this into ANY generative AI ex. Gemini, ChatGPT, Cluade. You will get plain text and .txt file
 
