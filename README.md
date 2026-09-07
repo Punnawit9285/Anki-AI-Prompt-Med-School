@@ -1,4 +1,6 @@
-**Ultimate anki flashcard AI prompt for med school students**
+**Ultimate anki flashcard AI prompt for med school with images**
+
+//infact any professions can use it, this is not limited to Medical School
 
 *Can Auto-add image to the back of the card*
 (images will be high-resolution screenshot of every corresponding slide page in attached file)
