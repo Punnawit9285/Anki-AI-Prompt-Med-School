@@ -2,6 +2,7 @@
 
 *Can Auto-add image to the back of the card*
 (images will be high-resolution screenshot of every corresponding slide page in attached file)
+
 ! this feature only work if your generative AI has access to local files. 
 ex. using Claude desktop / Antigravity / Claude code (VS code) / Codex (VS code)
 
