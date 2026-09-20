@@ -29,12 +29,15 @@ YOU CANNOT SCREEN RECORD OR SCREENSHOT A DISPLAY. You have no screen, camera, or
  - Python with PyMuPDF or pdf2image, if the import genuinely succeeds.
  Never install a package manager or a new dependency without asking the user first. Note that macOS system python3 does NOT ship the Quartz bindings, sips cannot split a multi-page PDF, and qlmanage only thumbnails page 1 — do not waste turns on these.
 
-1.3 THE SWIFT RENDERER (macOS reference implementation)
+1.3 THE RENDERER (macOS reference implementation)
  Write this to a scratch file, build it with swiftc -O render.swift -o render, and run it as: render <input.pdf> <outdir> <scale>
+ It writes JPEG directly, so there is no PNG stage to convert and delete afterwards.
 
 import Foundation
 import PDFKit
-import AppKit
+import CoreGraphics
+import ImageIO
+import UniformTypeIdentifiers
 
 let args = CommandLine.arguments
 guard args.count >= 4, let doc = PDFDocument(url: URL(fileURLWithPath: args[1])) else {
@@ -43,38 +46,41 @@ guard args.count >= 4, let doc = PDFDocument(url: URL(fileURLWithPath: args[1]))
 }
 let outDir = args[2]
 let scale = CGFloat(Double(args[3]) ?? 2.0)
+let quality = 0.72
 try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
+let space = CGColorSpaceCreateDeviceRGB()
 
 for i in 0..<doc.pageCount {
     guard let page = doc.page(at: i) else { continue }
     let box = page.bounds(for: .mediaBox)
-    let w = Int(box.width * scale), h = Int(box.height * scale)
-    let img = NSImage(size: NSSize(width: w, height: h))
-    img.lockFocus()
-    NSColor.white.setFill()
-    NSRect(x: 0, y: 0, width: w, height: h).fill()
-    if let ctx = NSGraphicsContext.current?.cgContext {
-        ctx.saveGState()
-        ctx.scaleBy(x: scale, y: scale)
-        ctx.translateBy(x: -box.origin.x, y: -box.origin.y)
-        page.draw(with: .mediaBox, to: ctx)
-        ctx.restoreGState()
-    }
-    img.unlockFocus()
-    guard let tiff = img.tiffRepresentation,
-          let rep = NSBitmapImageRep(data: tiff),
-          let png = rep.representation(using: .png, properties: [:]) else { continue }
-    let name = String(format: "%03d.png", i + 1)
-    try? png.write(to: URL(fileURLWithPath: outDir).appendingPathComponent(name))
-    print("wrote \(name)  \(w)x\(h)")
+    let w = Int((box.width * scale).rounded())
+    let h = Int((box.height * scale).rounded())
+    guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
+                              bytesPerRow: 0, space: space,
+                              bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { continue }
+    ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+    ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+    ctx.saveGState()
+    ctx.scaleBy(x: scale, y: scale)
+    ctx.translateBy(x: -box.origin.x, y: -box.origin.y)
+    page.draw(with: .mediaBox, to: ctx)
+    ctx.restoreGState()
+    guard let img = ctx.makeImage() else { continue }
+    let url = URL(fileURLWithPath: outDir).appendingPathComponent(String(format: "%03d.jpg", i + 1))
+    guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else { continue }
+    CGImageDestinationAddImage(dest, img, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
+    CGImageDestinationFinalize(dest)
+    print("wrote \(url.lastPathComponent)  \(w)x\(h)")
 }
 
  The white fill matters: PDF pages are transparent, and without it a white slide renders as black in Anki dark mode.
+ DRAW INTO AN EXPLICIT-PIXEL CGContext, NEVER INTO AN NSImage WITH lockFocus. On a Retina Mac an NSImage silently adopts the display backing scale and DOUBLES the output, so a scale of 2.6667 on a 720 x 540 pt slide yields 3844 x 2882 instead of the 1920 x 1440 you asked for, and the media folder quadruples for no gain in legibility. A CGContext takes its size in pixels and gives back exactly what you asked for.
+ VERIFY THE PIXEL SIZE OF THE FIRST PAGE BEFORE RENDERING THE REST: sips -g pixelWidth -g pixelHeight out/001.jpg. If the numbers come back twice what you intended, the renderer is at fault, not the scale, and lowering the scale to compensate is the wrong fix.
 
 1.4 RESOLUTION AND FILE SIZE
- - Choose the scale so the long edge lands at roughly 1920 px. A 960 x 540 pt slide therefore takes scale 2. Do not go below 1440 px on the long edge, because dense First Aid tables become unreadable.
- - PNG output is far too heavy for a media folder, often 5 MB a page. Convert every page to JPEG afterwards and delete the PNGs. On macOS: sips -s format jpeg -s formatOptions 72 in.png --out out.jpg
- - Aim for roughly 0.5 to 1.5 MB per page. A 54 page deck should land near 40 MB, not 300 MB. Report the final total to the user.
+ - Choose the scale so the long edge lands at roughly 1920 px. A 960 x 540 pt slide therefore takes scale 2, and a 720 x 540 pt slide takes scale 2.6667. Do not go below 1440 px on the long edge, because dense First Aid tables become unreadable.
+ - Write JPEG, never PNG. PNG output is far too heavy for a media folder, often 5 MB a page. The renderer above emits JPEG directly. Only if you fell back on a renderer that writes PNG do you convert afterwards and delete the PNGs: sips -s format jpeg -s formatOptions 72 in.png --out out.jpg
+ - A photo-heavy or histology deck lands around 0.5 to 1.5 MB a page. A plain text deck lands far lower, around 0.1 to 0.3 MB a page, which is correct and is NOT a sign of under-rendering — check the pixel dimensions before you react to a small file. Report the final total to the user.
 
 1.5 NAMING (THIS IS WHAT TIES AN IMAGE TO A CARD)
  - Every Anki profile pools all media into ONE collection.media folder, so a bare 001.jpg WILL eventually collide with another lecture. A prefix is mandatory.
@@ -89,11 +95,26 @@ for i in 0..<doc.pageCount {
 1.6 VERIFY BY LOOKING
  - Open at least the first, a middle, and the last rendered page and actually look at them. Confirm the pages rendered right side up, not blank, not black, and legible at the chosen resolution.
  - While looking, determine the numbering source required by STAGE 2: do these slides carry printed slide numbers or not? Answer that from the rendered images, never from extracted text alone.
+ - SURVEY AN IMAGE-HEAVY DECK WITH CONTACT SHEETS, NOT PAGE BY PAGE. Tile the rendered pages about six to a sheet at roughly 1280 px wide, labelled with their page numbers, and look at the sheets. Opening fifty pages one at a time burns the budget you need for authoring. Pass the file list through a list file rather than on the command line, because the folder name contains spaces.
+ - IF THE SLIDES PRINT THEIR NUMBERS IN A CORNER, crop that corner out of every page and tile the crops into one sheet, so you read fifty numbers off a single image. This is the step that stops an entire deck being keyed one slide off, and it is far more reliable than trusting that printed numbers track page order.
 
 
 ================================================================
 STAGE 2 — AUTHOR THE CARDS
 ================================================================
+
+ACCURACY OUTRANKS COVERAGE (READ THIS BEFORE WRITING A SINGLE CARD)
+A wrong card is worse than a missing card. Spaced repetition will drill whatever you write into long-term memory, and an error learned that way costs many times more to unlearn than it ever cost to learn. Where accuracy and the 80-90 percent coverage target pull against each other, accuracy wins, every time, without discussion.
+ - THE FRONT IS THE LECTURE. Every fact in the Text field must come from the slide it is keyed to. Do not enrich, correct, modernise or extend the slide's teaching on the front, even where you are confident the slide is out of date, because the student is examined on the lecture and not on the literature.
+ - THE EXTRA FIELD MAY CARRY OUTSIDE KNOWLEDGE, but only settled textbook-level fact that any standard source would state the same way. No single-study claims, no contested figures, no drug doses, and no number you are not sure of.
+ - WHEN YOU ARE NOT CERTAIN, WRITE LESS. An Extra field holding nothing but a citation and the slide image is a perfectly good card. Padding it with a half-remembered fact is not, and six weeks later the padding is indistinguishable from the real thing.
+ - NEVER INVENT a citation, a chapter number, an eponym, a syndrome name, a classification, a normal range, or a mnemonic attributed to a source.
+ - IF A SLIDE IS WRONG OR CONTRADICTS ITSELF, card what it says anyway, and flag it in your response text. Never argue with the slide inside a card.
+
+LANGUAGE (ENGLISH THROUGHOUT, WHATEVER LANGUAGE THE SLIDES ARE IN)
+ - Write every part of every card in English: the lecture name, the title, the subtopic headings, the bullets, the Extra field and the tag. This holds even when the source slides are written in another language.
+ - Translate the teaching, but keep each technical term in the exact form the slide prints it, so the card still matches what the lecturer says and what the exam will ask.
+ - Never mix two languages inside one deck, and never leave a heading untranslated because it was quicker.
 
 OUTPUT STRUCTURE
 Your response must consist of exactly three parts:
@@ -164,6 +185,13 @@ Never Cloze a Word Its Own Heading Already Gives Away:
  - If a term must be recalled in the heading AND still needs to appear in the bullets below it, cloze it in both places under the SAME number and mark the second one with [sa], as described under Repeated Cloze Targets. Do not leave the repeat unmarked.
 Structural Spacing: Add a double line break (<br><br>) right before introducing any main bullet point block.
 Body Formatting: Express concepts using clean bullet points/dashes in cloze deletion syntax (e.g., The target element is {{c1::<u>cloze text</u>}}).
+Every Card Stands Alone (NEVER POINT AT THE SLIDE, THE DECK, OR A POSITION):
+ - The card will be reviewed months later, on a phone, at speed, with no deck around it and the slide image sitting unseen below the fold. Nothing in the Text field may refer to anything the reader cannot already see on that card.
+ - BANNED OUTRIGHT, in the bullets and in the headings alike: as shown above, as seen below, shown here, this slide, the previous slide, the next slide, the figure, the diagram, the table above, in the image, on the right, on the left, see image, refer to the picture.
+ - WHERE A BULLET ONLY MAKES SENSE NEXT TO THE PICTURE, WRITE WHAT THE PICTURE SHOWS. A slide reading the structures labelled above becomes a bullet that names those structures. A slide reading note the difference between the two panels becomes a bullet that states the difference.
+ - The same applies across the deck. Never write as discussed earlier, as we saw, or covered in part 1, because a card has no earlier and the reader may meet this one first.
+ - The slide image on the back confirms an answer already given. It is never part of the question, and no cloze may depend on it.
+
 One Fact Per Bullet (NEVER CHAIN A LIST THROUGH COMMAS):
  - A bullet carries ONE fact. Whenever the slide gives a list, a series, or a chain of nested levels, every item takes its OWN dash bullet, separated from the next by a double line break (<br><br>), exactly like any other bullet.
  - Never compress a list into one long sentence whose items are strung together by commas and full stops. A reader scanning the card has to unpick that sentence before they can answer it, and the blanks inside it lose their alignment with the items they belong to.
@@ -227,9 +255,25 @@ Arrows for Consequence and Reaction:
  - Inside a MathJax expression use \rightarrow instead, because the two-hyphen form would render there as two minus signs. So prose carries --> and equations carry \rightarrow.
 Selective Clozing (NOT EVERY FACT BECOMES A BLANK):
  - Do NOT cloze every fact on the slide. Within each subtopic pick only the two or three highest-yield targets and leave every other fact as plain unclozed prose that supports them. Unclozed prose carries no braces and no underline, though it still carries the enzyme and process markup.
- - Numbers, quantities, doses, and measurements are never placed inside cloze braces and never underlined, even when they are high-yield. Write them as plain text so they are always visible.
+ - Numbers, quantities, doses, and measurements are plain text BY DEFAULT. Write them outside the braces and without an underline, so they stay visible and give the surrounding blank the context that makes it answerable.
+ - THE ONE CARVE-OUT: cloze a number when the NUMBER ITSELF is the thing being examined — a diagnostic cutoff, a normal reference range, a defining percentage, a classic ratio, a threshold that names a diagnosis. Those are answers in their own right, and leaving them visible tests nothing.
+   - Normal serum calcium is {{c1::<u>8.5 to 10.5</u>}} mg/dL.
+   - An anion gap above {{c1::<u>12</u>}} mEq/L defines a high anion gap acidosis.
+ - EVERYTHING ELSE STAYS VISIBLE. An incidental count, a molecular weight, a length or a proportion that merely describes the thing being tested is context, not a target: ubiquitin is 76 amino acids long keeps 76 in plain text while ubiquitin itself carries the blank.
+ - The test is whether an examiner would ask for that number on its own. If the number is the answer, cloze it. If it only furnishes the sentence, leave it standing.
+ - KEEP THE UNIT OUTSIDE THE CLOZE. The blank tests the value, and a revealed mg/dL or mEq/L tells the reader what kind of number they are reaching for, which is context rather than answer.
+ - A clozed number still carries its underline inside the braces like every other cloze, and a clozed range is written as one blank rather than two.
  - A subtopic reading that ubiquitin is the marker, that it is 76 amino acids long, and that it targets cytosolic and nuclear proteins should cloze ubiquitin and leave 76 and cytosolic and nuclear as plain text. The blanks carry the idea being tested and the plain text carries the context that makes it answerable.
  - Never use c0 or any cloze number below c1. Anki generates no card for them, so a fact worth marking is either a real numbered cloze or plain text, never a fake one.
+Cloze Answers Stay Short (A BLANK IS A TERM, NOT A SENTENCE):
+ - A cloze answer is a name, a term, a value or a short phrase, running roughly one to five words. Past that length it stops being recall and becomes recitation, and the reader starts failing cards on wording rather than on knowledge.
+ - WRONG, the whole idea buried in one blank:
+   - The committed step of {glycolysis} is catalysed by {{c1::<u>the enzyme that phosphorylates fructose-6-phosphate using ATP</u>}}.
+ - RIGHT, the term blanked and the description left visible so the blank is answerable:
+   - The committed step of {glycolysis} is catalysed by {{c1::<u>⟨PFK-1⟩</u>}}, which phosphorylates fructose-6-phosphate using ATP.
+ - If the operative term genuinely cannot be shortened, the bullet is carrying two facts and must be SPLIT, not clozed whole.
+ - A clozed MathJax equation is the one exception to the length limit, because an equation is a single indivisible answer however long it prints.
+
 Cloze Underlining (EVERY CLOZED ANSWER CARRIES AN UNDERLINE):
  - The answer text of every single cloze must be wrapped in underline tags placed INSIDE the braces, written exactly as {{c1::<u>answer text</u>}}. No cloze is ever left without them.
  - The tags go inside the braces, never outside. Inside, the blank stays clean while that group is being tested, and the answer appears underlined on every card where the group is NOT the one being tested. That underline is the whole point: it marks the words as a former blank so they stand out from ordinary prose instead of reading as plain text.
@@ -241,6 +285,9 @@ Cloze Grouping (GROUP THE TARGETS, DO NOT NUMBER THEM ONE BY ONE):
  - Aim for two to three targets per group throughout. A group of one is acceptable only when the subtopic genuinely contains a single fact. If a subtopic keeps producing lone groups, that is a sign it should be its own subtopic heading with a single fact under it, which is fine and preferable to padding.
  - Split by meaning, never by position. Keep a contrasting pair, a matched enzyme and product, or a linked cause and effect inside the SAME group, and open a new group where the idea changes. When the count divides unevenly prefer the even split, so five targets become three plus two rather than four plus one.
  - Numbering runs consecutively across the whole card, starting at c1 and never restarting. A later subtopic continues from where the previous one stopped, so a card whose first subtopic used c1 begins its second subtopic at c2. Never reuse a number in a different subtopic and never skip a number.
+ - CAP A NOTE AT FOUR CLOZE GROUPS. Anki generates one card per group, so a note running to c6 quietly drops six cards into the daily queue off a single slide, and a deck built that way becomes unreviewable weeks before the exam. Four is the ceiling.
+ - Where a slide's content genuinely needs more than four groups, SPLIT IT INTO TWO NOTES carrying sequence letters, each starting again at c1. Divide them at a subtopic boundary, never mid-idea, and never split a contrasting pair across the two.
+ - Splitting is not a defeat. Two four-group notes read better than one eight-group note, because the reader sees a shorter card and the blanks that remain visible stay close to the ones being tested.
 Repeated Cloze Targets and the [sa] Marker:
  - If a term that has already been clozed appears again later in the SAME subtopic — in a later sentence, in a later bullet, on an asterisk continuation line, or in the bullets beneath a heading you clozed — cloze it again and write the marker [sa] immediately after the closing braces, outside the cloze, exactly as {{c1::<u>Ubiquitin</u>}}[sa].
  - THIS IS EXPECTED BEHAVIOUR, NOT AN EXCEPTION. Repeats are common in lecture prose, and every one of them that genuinely carries the idea forward gets the marker. A finished deck containing NO [sa] anywhere has almost certainly left its repeats sitting as plain text, which is a defect: the second mention is usually the one that shows the reader where the answer actually does its work, so leaving it visible hands the answer over.
@@ -296,17 +343,60 @@ Verify every line and fix any line that fails before printing the code block. Ru
  - No slide carries both a lettered plain key and a lettered range key in the wrong order, that is no range card of a lettered slide sorts ahead of a plain card of the same slide.
  - No bullet contains the phrases which is also called, also known as, or that is, used to introduce a second name, since every alternative name sits in round brackets instead.
  - Every [sa] marker sits outside its braces, carries the same number as its original, and has that original earlier in the SAME subtopic. No other square brackets appear outside the slide key.
+ - No cloze answer runs longer than about five words, with a clozed MathJax equation the only permitted exception.
+ - No card points at its own slide or at the deck. Grep the whole file for shown above, shown below, shown here, this slide, previous slide, next slide, the figure, the diagram, the table above, in the image, on the right, on the left, see image and as discussed, and rewrite every hit.
+ - No note carries more than four cloze groups. Count the distinct cloze numbers on every line and split any note that exceeds four at a subtopic boundary.
+ - Every clozed number is one an examiner would ask for on its own, every incidental quantity is still plain text, and every unit sits outside its cloze.
+ - Every card is written in English throughout, including the lecture name, the headings, the Extra field and the tag, whatever language the slides were in.
+ - Every m.) line spells its expansion out in full, in the device's own order, and names ONLY items that appear on the front of that same card. Check each one against its own Text field rather than from memory.
+ - Every m.) device you composed yourself ends with (coined), and no mnemonic anywhere is attributed to a book or an author.
+ - No m.) line sits on a card whose content is derivable, and no x.) line names a counterpart that is not genuinely confusable. A deck in which MOST cards carry neither line is the correct result, and one in which most cards carry both means you manufactured them.
+ - The annotation lines appear at most once each, in the order m.) then x.), after the citation and before the image, separated from each other by a single <br> and from the citation by <br><br>.
+ - Nothing in any Extra field states a fact you cannot trace to the slide or to settled textbook teaching, and no citation, chapter number, eponym, syndrome name or reference range has been invented.
  - Each Text field ends with <br> immediately before its closing quote.
  - The lines are in ascending numeric slide order.
 State the result of this check in one sentence in your response text, along with which numbering source you used, before the code block.
 
 2. EXTRA (Back Field)
 Color Enclosure: The ENTIRE text string inside the Extra column must be wrapped completely inside an HTML font tag specifying single quotes for color: <font color='#55aaff'>Supplementary info — sourcecitation</font>
-Component Layout: Separate the non-clozed supplemental medical context from the mandatory source citation using an em dash ( — ).
+Component Layout: Separate the non-clozed supplemental medical context from the mandatory source citation using an em dash ( — ). The field is then built in a fixed order that never varies: the supplementary context, the em dash, the citation, then any annotation lines described below, then the slide image last.
+Do Not Restate the Front: the supplementary context must ADD something the Text field does not already say. Repeating a bullet the reader has just answered wastes the only line they actually read after recalling. If the slide leaves you nothing to add, write one sentence of standard textbook context, or write none at all and let the citation and the image carry the field. A thin Extra field is better than a padded one.
 Source Citations Syntax: Format book chapters as booknamech##, journals as journalnameYYYY, and lectures as authornameYYYY. Never use cloze deletion syntax here. Never invent a chapter number you did not read — if the deck cites a book without a chapter, use the book name plus its year instead.
 Enzyme and Process Markup: applies here exactly as it does in the Text field.
+
+ANNOTATION LINES (m.) AND x.) — OPTIONAL, AT MOST ONE OF EACH, ALWAYS IN THIS ORDER)
+Two short annotation lines may follow the citation. Each is optional, each appears at most once on a card, and where both are present m.) always comes first. They sit AFTER the citation and BEFORE the slide image, separated from the citation by <br><br> and from each other by a SINGLE <br>, because together they form one compact annotation block rather than two separate paragraphs.
+ - The finished field therefore reads: <font color='#55aaff'>context — citation<br><br>m.) device — expansion<br>x.) the contrast<br><br><img src='aam-042.jpg'></font>
+ - Both lines obey every CSV rule without exception: no semicolon, no double quote, no HTML entity, no square bracket, and single quotes on any attribute.
+ - Neither line may ever contain a cloze. The Extra field is never clozed.
+ - MOST CARDS WILL CARRY NEITHER LINE, AND THAT IS THE CORRECT OUTCOME. Both rules below describe a narrow case. A deck in which every card sports a mnemonic and a contrast is a deck where both have been manufactured, and manufactured ones are worse than none.
+
+m.) THE MNEMONIC LINE (ONLY WHERE A MNEMONIC IS GENUINELY EARNED)
+ - Write the marker as a lowercase m, a full stop and a closing parenthesis, then a single space, then the device: m.) PVT TIM HaLL — Phenylalanine, Valine, ...
+ - USE ONE ONLY FOR: a list of three or more items that has no inherent order, a classification whose members must be recalled as a set, or an arbitrary association that carries no logic at all. These are the cases where recall has nothing to hold on to and a device genuinely helps.
+ - DO NOT USE ONE FOR ANYTHING DERIVABLE: a mechanism, a cause-and-effect chain, a pathway whose steps follow from the chemistry, a sequence already fixed by anatomy or by time, or a list of two. A mnemonic laid over derivable content is a SECOND arbitrary string to memorise on top of the fact, and it makes the card harder rather than easier.
+ - SPELL THE EXPANSION OUT IN FULL. A device with no expansion is useless six weeks later, when the letters survive and the words do not. Write the device, then an em dash, then every item in the device's own order, capitalising the letter the device uses: m.) MUDPILES — Methanol, Uremia, Diabetic ketoacidosis, Propylene glycol, Isoniazid, Lactate, Ethylene glycol, Salicylates
+ - EVERY ITEM IN THE EXPANSION MUST APPEAR ON THE FRONT OF THAT SAME CARD. A mnemonic expanding to items the card never taught is introducing new content on the answer side, where nothing is ever tested and nothing will ever be learned. If the card covers only part of a list, either widen the front to carry the whole list or leave the line off.
+ - The list the mnemonic carries may sit on the front as plain unclozed text. That is often the best design: the card tests the criterion or the consequence, the visible list supplies the set, and the m.) line gives the reader the handle for holding that set.
+ - PROVENANCE IS MANDATORY, AND THIS IS THE MOST IMPORTANT RULE ON THIS LINE. Prefer a mnemonic that genuinely circulates in medical teaching — First Aid, a standard textbook, a widely used wards mnemonic — and write it bare. If you compose one yourself, that is allowed, but END THE LINE WITH (coined) so the reader knows the device is yours and will not repeat it to an examiner as though it were canonical.
+ - WHEN IN DOUBT, MARK IT (coined). A fabricated mnemonic presented bare is exactly the kind of error this prompt exists to prevent, because it is confidently wrong and it gets drilled daily.
+ - Never attribute a mnemonic to a source or a book. The marker (coined) is the only provenance note that ever appears on this line; a circulating mnemonic carries none.
+ - Keep it printable. Several classic medical mnemonics are crude. Use the sanitised variant, or choose another device.
+ - The enzyme and process markup is NOT applied inside the m.) line. A mnemonic is a memory device rather than prose, and the brackets only clutter a letter-by-letter list.
+ - One m.) line per card. If two lists on one card each want a mnemonic, the card is carrying two ideas and should be two cards.
+
+x.) THE CONFUSABLE-PAIR LINE (THE DISCRIMINATOR AGAINST INTERFERENCE)
+ - Write the marker as a lowercase x, a full stop and a closing parenthesis, then a single space, then the contrast.
+ - INTERFERENCE IS THE MAIN WAY A LARGE MEDICAL DECK FAILS. Once a few thousand cards are in circulation the reader rarely forgets a fact outright. They SWAP it with its neighbour: the other cycle, the sibling enzyme, the epithelium that looks the same down a microscope. This line names the neighbour and gives the one feature that separates the pair, so the swap is corrected at the moment it would otherwise be reinforced.
+ - USE ONE WHERE A GENUINELY CONFUSABLE COUNTERPART EXISTS: the {Cori cycle} against the {Cahill cycle}, ⟨hexokinase⟩ against ⟨glucokinase⟩, a conducting bronchiole against a respiratory one, a deficiency against its mirror image, a name that differs by a syllable.
+ - DO NOT MANUFACTURE ONE. A contrast invented to fill the line teaches the reader a confusion they did not previously have, which is strictly worse than silence. If no real lookalike exists, omit the line.
+ - FORMAT: name what it is NOT, then the single feature that tells the two apart. x.) not the {Cahill cycle}, which returns alanine to the liver — the {Cori cycle} returns lactate
+ - ONE DISCRIMINATING FEATURE, NOT A COMPARISON TABLE. If a pair needs several points of contrast, they belong on the FRONT of a single card as two bold headings under one title, which is what the cloze grouping rules already ask for. The x.) line is for the pair that does not deserve a card of its own.
+ - The enzyme and process markup DOES apply on this line, exactly as it does in the Text field, because this line is ordinary prose.
+ - The counterpart you name must be real and standard. Never invent a condition, an enzyme or a structure to contrast against.
 Slide Image (LAST THING INSIDE THE FONT TAG): end the Extra field with <br><br> then one img tag per slide number appearing in the key, written with single quotes, placed INSIDE the closing font tag: <font color='#55aaff'>context — citation<br><br><img src='ccom-009.jpg'></font>
- - The double break is deliberate: it puts a blank line between the supplementary text and the picture, matching the <br><br> spacing used everywhere else, so the image never crowds the citation.
+ - The double break is deliberate: it puts a blank line between the text and the picture, matching the <br><br> spacing used everywhere else, so the image never crowds what sits above it.
+ - WHERE AN ANNOTATION BLOCK IS PRESENT, the image still comes last and the <br><br> falls after the LAST annotation line rather than after the citation. Nothing is ever placed below the image.
  - Inside the font tag, not after it, so the rule that the entire Extra string sits within one font wrapper still holds. A font colour has no effect on an image, so nothing is harmed.
  - Filename: prefix from STAGE 1.5, then the slide number zero padded to three digits, then .jpg. The number must match the key on the SAME line.
  - Joined Keys: a range or non-adjacent key gets one img tag per slide it covers, in ASCENDING numeric order, separated by <br>. So [013-012] ends with <img src='xx-012.jpg'><br><img src='xx-013.jpg'>.
@@ -317,19 +407,22 @@ Slide Image (LAST THING INSIDE THE FONT TAG): end the Extra field with <br><br> 
 Layout: Exactly one unified lowercase organizational tag per card line. Combine the component shorthand (e.g., bsx, dx, tx, dtx, pgx) with a short disease/topic acronym (e.g., bsxtranscription, txmi).
 
 MODEL EXAMPLE LINES WITH SPECIFIC HEADINGS
+Note what the annotation lines do and do not do across these six examples. Two cards carry an x.) line and one carries an m.), and the other three carry neither, because their content is derivable and a device would only add a second thing to remember. That ratio is deliberate and your deck should look similar.
 "[005] Gene expression:<br><b>Nucleosome Structural Organization</b><br><br><b>Macromolecular Architecture</b><br><br>- Core DNA Length: Each eukaryotic nucleosome unit contains roughly 200 nucleotide pairs of DNA.<br><br>- Core Particle Components: High salt concentrations separate the core particle into a 147-nucleotide-pair double helix and a central {{c1::<u>histone octamer</u>}}.<br>";"<font color='#55aaff'>Individual nucleosome core particles are isolated when a linker-cleaving enzyme called ⟨nuclease⟩ digests linker DNA. — chuaypen2026<br><br><img src='ge-005.jpg'></font>";"bsxchromosome"
 
 "[007] Gene expression:<br><b>The Two Functional Formats of Chromatin</b><br><br><b>{{c1::<u>Euchromatin</u>}}</b><br><br>- Loose chromatin that remains fully open and active for {transcription}.<br>* whereas the condensed format is inaccessible to transcription factors.<br><br><b>{{c1::<u>Heterochromatin</u>}}</b><br><br>- Densely packed, condensed chromatin that is transcriptionally inactive.<br><br>- It is the format that carries the inactive X chromosome in the female nucleus.<br>";"<font color='#55aaff'>Euchromatin is driven by ⟨histone acetyltransferases⟩, leading to hyperacetylated histone tails. — chuaypen2026<br><br><img src='ge-007.jpg'></font>";"bsxchromosome"
 
 "[012] Gene expression:<br><b>RNA Polymerase Subunit Composition</b><br><br><b>Core Enzyme Subunits</b><br><br>- The bacterial core enzyme carries two {{c1::<u>alpha</u>}} subunits.<br><br>- It carries one {{c1::<u>beta</u>}} subunit.<br><br>- It carries one {{c1::<u>beta prime</u>}} subunit.<br><br><b>Holoenzyme Assembly and Promoter Recognition</b><br><br>- Adding the {{c2::<u>sigma factor</u>}} to the core enzyme converts it into the {{c2::<u>holoenzyme</u>}}.<br>* whereas the core enzyme on its own can elongate but cannot start a chain.<br><br>- The {{c2::<u>sigma factor</u>}}[sa] lets ⟨RNA polymerase⟩ recognise the {{c3::<u>promoter</u>}} region and start {transcription} at the correct {{c3::<u>start site</u>}}.<br>";"<font color='#55aaff'>Sigma factor is released shortly after initiation, leaving the core enzyme to carry out elongation on its own. — essentialcellbiologych06<br><br><img src='ge-012.jpg'></font>";"bsxtranscription"
 
-"[010] Amino acid metabolism:<br><b>Metabolic Precursors of the Non-Essential Amino Acids</b><br><br><b>Precursors Drawn From Glycolysis</b><br><br>- Alanine is formed by {transamination} of {{c1::<u>pyruvate</u>}}.<br><br>- Serine is derived from the glycolytic intermediate {{c1::<u>3-phosphoglycerate</u>}}.<br><br><b>Precursors Drawn From the TCA Cycle</b><br><br>- Aspartate is formed by {transamination} of {{c2::<u>oxaloacetate</u>}}.<br><br>- Glutamate is formed by {transamination} of {{c2::<u>alpha-ketoglutarate</u>}}.<br><br>- Glutamine is then made from {{c3::<u>glutamate</u>}} by the enzyme {{c3::<u>⟨glutamine synthetase⟩</u>}}.<br>";"<font color='#55aaff'>Only the carbon skeleton needs a dedicated precursor because the amino group is supplied by {transamination} from the shared glutamate pool. — chuaypen2025<br><br><img src='aam-010.jpg'></font>";"bsxaasynthesis"
+"[009] Amino acid metabolism:<br><b>The Essential Amino Acids</b><br><br><b>What Makes an Amino Acid Essential</b><br><br>- An amino acid is essential when the body cannot build its {{c1::<u>carbon skeleton</u>}}, so the intact amino acid must come from the {{c1::<u>diet</u>}}.<br><br>- Nine are essential in the healthy adult: phenylalanine, valine, threonine, tryptophan, isoleucine, methionine, histidine, leucine and lysine.<br><br><b>The Two Conditionally Essential Cases</b><br><br>- Arginine becomes essential during {{c2::<u>growth</u>}}<br>* whereas the adult urea cycle supplies enough for maintenance on its own.<br><br>- Tyrosine becomes essential in {{c2::<u>phenylketonuria</u>}}, because the blocked ⟨phenylalanine hydroxylase⟩ can no longer make it from phenylalanine.<br>";"<font color='#55aaff'>Essential describes a dietary requirement and not metabolic importance, since the non-essential amino acids are no less necessary and merely happen to be synthesisable. — chuaypen2025<br><br>m.) PVT TIM HaLL — Phenylalanine, Valine, Threonine, Tryptophan, Isoleucine, Methionine, Histidine, Leucine, Lysine<br>x.) not the conditionally essential pair, which the body can normally make and only fails to supply under growth or an enzyme block<br><br><img src='aam-009.jpg'></font>";"bsxaametabolism"
+
+"[010] Amino acid metabolism:<br><b>Metabolic Precursors of the Non-Essential Amino Acids</b><br><br><b>Precursors Drawn From Glycolysis</b><br><br>- Alanine is formed by {transamination} of {{c1::<u>pyruvate</u>}}.<br><br>- Serine is derived from the glycolytic intermediate {{c1::<u>3-phosphoglycerate</u>}}.<br><br><b>Precursors Drawn From the TCA Cycle</b><br><br>- Aspartate is formed by {transamination} of {{c2::<u>oxaloacetate</u>}}.<br><br>- Glutamate is formed by {transamination} of {{c2::<u>alpha-ketoglutarate</u>}}.<br><br>- Glutamine is then made from {{c3::<u>glutamate</u>}} by the enzyme {{c3::<u>⟨glutamine synthetase⟩</u>}}.<br>";"<font color='#55aaff'>Only the carbon skeleton needs a dedicated precursor because the amino group is supplied by {transamination} from the shared glutamate pool. — chuaypen2025<br><br>x.) not the essential amino acids, whose carbon skeletons the body cannot build at all — these are assembled from intermediates it already makes<br><br><img src='aam-010.jpg'></font>";"bsxaasynthesis"
 
 "[042] Mineral metabolism:<br><b>Phosphate as the Major Intracellular Buffer</b><br><br><b>Distribution of Buffer Phosphate</b><br><br>- The remaining 15 percent of body phosphate acts as buffer, present as \(\mathrm{HPO_4}^{2-}\) and \(\mathrm{H_2PO_4^-}\), with 14 percent intracellular and 1 percent extracellular.<br><br><b>How the Pair Resists Acid</b><br><br>- Added acid is taken up by the reaction {{c1::<u>\(\mathrm{HPO_4}^{2-} + \mathrm{H^+} \rightarrow \mathrm{H_2PO_4^-}\)</u>}}, so the pair buffers a fall in pH.<br><br>- Because most of it sits inside cells, a large acid load --> phosphate buffering --> a rise in urinary {{c1::<u>titratable acid</u>}}.<br>";"<font color='#55aaff'>Bicarbonate handles most extracellular buffering, which is why phosphate is described as the major intracellular buffer rather than a plasma one. — chuaypen2025<br><br><img src='mine-042.jpg'></font>";"bsxacidbase"
 
 
 ================================================================
-STAGE 3 — INSTALL THE IMAGES INTO ANKI
+STAGE 3 — INSTALL THE IMAGES AND LOAD THE DECK
 ================================================================
 
 A card referencing an image that is not in collection.media shows a broken image forever. Anki does NOT copy media during a text import — it resolves every <img src> against collection.media at review time. The render folder from STAGE 1 is staging only, and the deck is not finished until the files are installed.
@@ -346,9 +439,21 @@ A card referencing an image that is not in collection.media shows a broken image
  - Copy the files in. Never delete anything from collection.media, and never move the staging folder into place wholesale.
  - After copying, verify programmatically that EVERY distinct filename referenced by the deck now resolves inside collection.media. Report the count. Note that this count is normally lower than the page count, because skipped pages produce no cards.
 
-3.3 TELL THE USER WHAT REMAINS
+3.3 PUSH THE NOTES IN DIRECTLY WHERE ANKICONNECT IS AVAILABLE (PREFERRED OVER A MANUAL IMPORT)
+ - TEST FIRST, DO NOT ASSUME. POST a JSON body carrying the action version and version 6 to http://127.0.0.1:8765. If it answers, AnkiConnect is installed and Anki is running, and you can write the notes straight into the collection so the user never opens an import dialog. If it does not answer, say so once and fall through to the manual import in 3.4.
+ - Anki itself must be running, because AnkiConnect is an HTTP server living inside the app. A refused connection almost always means Anki is closed rather than that the add-on is missing, so ask before concluding anything.
+ - READ THE FIELD NAMES, NEVER GUESS THEM. Call modelFieldNames for the cloze note type before building any payload. On a stock Cloze note type the fields are Text and Back Extra — the back field is NOT called Extra, and a payload whose keys do not match exactly is rejected.
+ - Ask the user which deck to add to before writing anything. Then createDeck, then canAddNotes as a dry run across the whole batch, and only then addNotes.
+ - addNotes returns null in the position of every note it rejected. Count the nulls, report them, and name the cards they came from. Never report success from the mere absence of an error.
+ - Pass options with allowDuplicate false and duplicateScope deck, so that re-running the push tops the deck up instead of doubling it.
+ - Parse the generated file by stripping the leading and trailing double quote from each line and splitting on the three-character sequence of a double quote, a semicolon and a double quote. Never hand these lines to a generic CSV reader, because the fields are full of HTML and it will mangle them.
+ - STILL WRITE THE .txt FILE even when you push directly. It is the artifact the user keeps, re-imports on another machine, and diffs against a later run.
+ - Media does NOT go through AnkiConnect. Copy the files as in 3.2, because storeMediaFile needs base64 and buys nothing.
+ - Confirm afterwards with getMediaFilesNames using the lecture prefix as the pattern, so you know Anki can SEE the images rather than merely that the files are on disk.
+
+3.4 TELL THE USER WHAT REMAINS
  State plainly, because none of it is guessable from the file:
- - The file imports into a stock Cloze note type with no field changes: map the columns Text, Extra, Tags, and keep Allow HTML in fields checked.
+ - If the notes were not pushed in via 3.3, the file imports into a stock Cloze note type with no field changes: map the columns Text, Extra, Tags, and keep Allow HTML in fields checked.
  - The image rides inside Extra, so it appears wherever the back template already prints that field. On the stock Cloze note type that field is called Back Extra. If the user sees the card but no picture, the cause is almost always that the back template does not print the Extra field at all, or that the files never reached collection.media.
  - If Anki was running while files were copied, run Tools, Check Media once so Anki reconciles its media database.
  - Check Media will list the skipped pages under Unused files. They should NOT be deleted if the user may card those pages later.
