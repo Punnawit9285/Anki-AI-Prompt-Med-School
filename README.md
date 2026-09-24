@@ -8,7 +8,6 @@
 ! this feature only work if your generative AI has access to local files. 
 ex. using Claude desktop / Antigravity / Claude code (VS code) / Codex (VS code)
 
-demo : https://claude.ai/code/artifact/a400c085-faf1-4c36-8e32-55f2f224ae84?via=auto_preview
 
 **What will it look like?**
 
