@@ -1,6 +1,9 @@
 # Anki AI Prompt for Med School
 
-**An AI-assisted Anki workflow built with medical students in mind.** Give an AI your lecture PDF and this prompt. You get back structured, high-yield cloze flashcards in slide order, ready for Anki. If the AI can reach files on your computer, each card also shows its original slide on the back.
+by Punnawit Wasinrat 
+Medical student at Faculty of Medicine Chulalongkorn University, Thailand
+
+**An AI-assisted Anki workflow built by a medical student for medical students.** Give an AI your lecture PDF and this prompt. You get back structured, high-yield cloze flashcards in slide order, ready for Anki. If the AI can reach files on your computer, each card also shows its original slide on the back.
 
 - **No coding and no VS Code.** The prompt works in any AI chat: ChatGPT, Claude or Gemini, in the browser or on your phone.
 - **Slide images, and no importing,** with an AI desktop app that can access your files, such as the Claude or ChatGPT desktop app.
