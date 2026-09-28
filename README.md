@@ -1,6 +1,7 @@
 # Anki AI Prompt for Med School
 
-by Punnawit Wasinrat (Medical student at Faculty of Medicine Chulalongkorn University, Thailand)
+handcrafted by Punnawit Wasinrat. 
+(Medical student at Faculty of Medicine Chulalongkorn University, Thailand)
 
 **An AI-assisted Anki workflow built by a medical student for medical students.** Give an AI your lecture PDF and this prompt. You get back structured, high-yield cloze flashcards in slide order, ready for Anki. If the AI can reach files on your computer, each card also shows its original slide on the back.
 
