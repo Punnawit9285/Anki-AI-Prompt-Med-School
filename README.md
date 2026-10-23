@@ -129,7 +129,7 @@ With a comma, `[034, USMLE]` would sort before `[034-033]`. That's why the label
   - Appends sequential lowercase letters (`[099a]`, `[099b]`) for multi-card slides to preserve reading order.
 
 - **Information Design & Selective Clozing**
-  - Applies the minimum information principle, targeting 2–3 clozes per group (`{{c1::...}}`).
+  - Applies the minimum information principle, giving every cloze in a subtopic one shared number (`{{c1::...}}`), usually 2–3 blanks. A subtopic gets a second number only when it holds more than four.
   - Mandates inline underline tags inside cloze boundaries (`{{c1::<u>answer text</u>}}`).
   - Keeps numerical metrics, doses, and measurements as unclozed plain text context.
   - Tracks repeated cloze targets within a subtopic using an external `[sa]` marker (`{{c1::<u>Target</u>}}[sa]`).
